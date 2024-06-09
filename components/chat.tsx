@@ -6,11 +6,6 @@ import { Clipboard } from 'lucide-react';
 import { NotebookPen } from 'lucide-react';
 import remarkGfm from 'remark-gfm';
 
-
-
-
-import { createRoot } from 'react-dom/client';
-
 interface ChatComponentProps {
   plugin: any;
   chat_id: string;
@@ -69,27 +64,6 @@ const CodeBlock: React.FC<{ language: string; value: string }> = ({ language, va
   );
 };
 
-// const ReactView: React.FC<{ markdown: string }> = ({ markdown }) => {
-//   return (
-//     <ReactMarkdown
-//       className="" // Add this line
-//       components={{
-//         code({ node, inline, className, children, ...props }) {
-//           const match = /language-(\w+)/.exec(className || '');
-//           return !inline && match ? (
-//             <CodeBlock language={match[1]} value={String(children).replace(/\n$/, '')} />
-//           ) : (
-//             <code className={className} {...props}>
-//               {children}
-//             </code>
-//           );
-//         },
-//       }}
-//     >
-//       {markdown}
-//     </ReactMarkdown>
-//   );
-// };
 const ReactView: React.FC<{ markdown: string }> = ({ markdown }) => {
   return (
     <ReactMarkdown
@@ -220,7 +194,7 @@ const ChatComponent = forwardRef<{
         continue;
       }
 
-      const block_ref_content = await plugin.get_ref_blocks_content(modified_content);
+      const block_ref_content = await plugin.getRefBlocksContent(modified_content);
       if (block_ref_content.length > 0) {
         modified_content += `Referenced content:\n${block_ref_content}`;
       }
