@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import { CustomModels } from "../types";
+import { CustomModels } from "../src/types";
 export class RemoveCustomModelModal extends Modal {
     plugin: any;
 

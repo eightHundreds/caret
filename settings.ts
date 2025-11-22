@@ -23,7 +23,7 @@ type ModelDropDownSettings = {
     perplexity: string;
 };
 
-import { Models, CustomModels, LLMProviderOptions } from "./types";
+import { Models, CustomModels, LLMProviderOptions } from "./src/types";
 import CaretPlugin, { DEFAULT_SETTINGS } from "./main";
 
 export class CaretSettingTab extends PluginSettingTab {

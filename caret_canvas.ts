@@ -1,7 +1,7 @@
 import CaretPlugin from "main";
 import { View } from "obsidian";
 
-import { CaretPluginSettings, Edge, Node, SparkleConfig } from "./types";
+import { CaretPluginSettings, Edge, Node, SparkleConfig } from "./src/types";
 
 export class CaretCanvas {
     nodes: Node[];

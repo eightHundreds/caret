@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { ConvertTextToNoteModal } from "../modals/convertTextToNoteModal";
 import { InsertNoteModal } from "../modals/insertNoteModal";
 import ChatComponent from "../components/chat";
-import { Message } from "../types";
+import { Message } from "../src/types";
 import { Notice, ItemView, WorkspaceLeaf } from "obsidian";
 import CaretPlugin from "../main";
 export const VIEW_CHAT = "main-caret";
