@@ -1,32 +1,10 @@
 import { App, Notice, PluginSettingTab, Setting, debounce } from "obsidian";
-type ModelDropDownSettings = {
-    openai: string;
-    groq: string;
-    ollama: string;
-    anthropic?: string;
-    custom?: string; // Make 'custom' optional
-    perplexity: string;
-};
+type ModelDropDownSettings = Record<string, string>;
 
 import type CaretPlugin from "../main";
 import type { CaretPluginSettings } from "../types";
 import { DEFAULT_SETTINGS } from "../config/default-setting";
-
-type ApiKeyConfig = {
-    label: string;
-    placeholder: string;
-    keyField: keyof CaretPluginSettings;
-};
-
-const API_KEY_CONFIG: Record<string, ApiKeyConfig> = {
-    openai: { label: "OpenAI", placeholder: "OpenAI API key", keyField: "openai_api_key" },
-    groq: { label: "Groq", placeholder: "Groq API key", keyField: "groq_api_key" },
-    anthropic: { label: "Anthropic", placeholder: "Anthropic API key", keyField: "anthropic_api_key" },
-    openrouter: { label: "OpenRouter", placeholder: "OpenRouter API key", keyField: "open_router_key" },
-    google: { label: "Google Gemini", placeholder: "Google Gemini API key", keyField: "google_api_key" },
-    perplexity: { label: "Perplexity", placeholder: "Perplexity API key", keyField: "perplexity_api_key" },
-    xai: { label: "xAI", placeholder: "xAI API key", keyField: "xai_api_key" },
-};
+import { API_KEY_CONFIG } from "../config/llm-provider-registry";
 
 export class CaretSettingTab extends PluginSettingTab {
     plugin: CaretPlugin;

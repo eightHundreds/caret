@@ -13,7 +13,6 @@ import {
 // // @ts-ignore
 // import ollama from "ollama/browser";
 import { encodingForModel } from "js-tiktoken";
-import OpenAI from "openai";
 import { around } from "monkey-around";
 import { Canvas, ViewportNode, Message, Node, Edge, SparkleConfig, UnknownData, ImageModelOptions, NewNode, CaretPluginSettings } from "./types";
 import {
@@ -42,33 +41,24 @@ import { LinearWorkflowEditor } from "./ui/views/workflowEditor";
 import { FullPageChat, VIEW_CHAT } from "./ui/views/chat";
 import { CaretCanvas } from "./features/canvas/caret_canvas";
 const parseString = require("xml2js").parseString;
-import { createGoogleGenerativeAI, GoogleGenerativeAIProvider } from "@ai-sdk/google";
-import { createOpenAI, OpenAIProvider } from "@ai-sdk/openai";
 import { StreamTextResult, CoreTool } from "ai";
-import { AnthropicProvider, createAnthropic } from "@ai-sdk/anthropic";
-import { GroqProvider, createGroq } from "@ai-sdk/groq";
-import { createOllama, OllamaProvider } from "ollama-ai-provider";
-import { createOpenRouter, OpenRouterProvider } from "@openrouter/ai-sdk-provider";
-import { createOpenAICompatible, OpenAICompatibleProvider } from "@ai-sdk/openai-compatible";
-import { createXai, xai, XaiProvider } from "@ai-sdk/xai";
 import { DEFAULT_SETTINGS } from "./config/default-setting";
+
+import { buildProviderMaps, createProviderClient, ImageProviderKey } from "./services/provider-factory";
+import type { eligible_provider, image_provider } from "./services/llm_calls";
+import { ProviderKey } from "./config/llm-provider-registry";
+import { createXai } from "@ai-sdk/xai";
 
 export default class CaretPlugin extends Plugin {
     settings: CaretPluginSettings;
     canvas_patched: boolean = false;
     selected_node_colors: any = {};
     color_picker_open_on_last_click: boolean = false;
-    openai_client: OpenAIProvider;
-    groq_client: GroqProvider;
-    anthropic_client: AnthropicProvider;
-    ollama_client: OllamaProvider;
-    openrouter_client: OpenRouterProvider;
     encoder: any;
     pdfjs: any;
-    google_client: GoogleGenerativeAIProvider;
-    custom_client: OpenAICompatibleProvider | undefined | null;
-    perplexity_client: OpenAICompatibleProvider;
-    xai_client: XaiProvider;
+    custom_client: any;
+    llmProviders: Partial<Record<eligible_provider, sdk_provider>> = {};
+    imageProviders: Partial<Record<ImageProviderKey, image_provider>> = {};
 
     async onload() {
         // Initalize extra icons
@@ -83,51 +73,9 @@ export default class CaretPlugin extends Plugin {
         // Load settings
         await this.loadSettings();
 
-        // Initialize API clients
-        if (this.settings.openai_api_key) {
-            this.openai_client = createOpenAI({ apiKey: this.settings.openai_api_key });
-        }
-        if (this.settings.groq_api_key) {
-            this.groq_client = createGroq({ apiKey: this.settings.groq_api_key });
-        }
-        if (this.settings.anthropic_api_key) {
-            this.anthropic_client = createAnthropic({
-                apiKey: this.settings.anthropic_api_key,
-                headers: {
-                    "anthropic-dangerous-direct-browser-access": "true",
-                },
-            });
-        }
-
-        if (this.settings.open_router_key) {
-            this.openrouter_client = createOpenRouter({
-                apiKey: this.settings.open_router_key,
-            });
-        }
-
-        if (this.settings.google_api_key) {
-            this.google_client = createGoogleGenerativeAI({
-                apiKey: this.settings.google_api_key,
-                // dangerouslyAllowBrowser: true,
-            });
-        }
-
-        if (this.settings.perplexity_api_key) {
-            this.perplexity_client = createOpenAICompatible({
-                apiKey: this.settings.perplexity_api_key,
-                baseURL: "https://api.perplexity.ai/",
-                name: "perplexity",
-            });
-        }
-
-        if (this.settings.xai_api_key) {
-            this.xai_client = createXai({
-                apiKey: this.settings.xai_api_key,
-            });
-        }
-
-        // SEt up Ollama
-        this.ollama_client = createOllama();
+        const { llmProviders, imageProviders } = buildProviderMaps(this.settings);
+        this.llmProviders = llmProviders;
+        this.imageProviders = imageProviders;
         this.custom_client = undefined;
 
         // Initialize settings dab.
@@ -3122,14 +3070,33 @@ version: 1
         await this.saveData(this.settings);
     }
 
-    getImageProvider() {
-        switch (this.settings.image_provider) {
-            case "openai":
-                return this.openai_client;
-            case "xai":
-                return this.xai_client;
-            default:
-                return null;
+    getProviderClient(provider: eligible_provider): sdk_provider {
+        const cached = this.llmProviders[provider];
+        if (cached) return cached;
+        const created = createProviderClient(provider as ProviderKey, this.settings);
+        if (!created) {
+            throw new Error(`Missing API client for provider ${provider}. 请检查 API key 配置。`);
         }
+        this.llmProviders[provider] = created;
+        return created;
+    }
+
+    getImageProvider() {
+        const providerKey: ImageProviderKey = this.settings.image_provider === "xai" ? "xai" : "openai";
+        const cached = this.imageProviders[providerKey];
+        if (cached) return cached;
+        if (providerKey === "openai") {
+            const created = createProviderClient("openai", this.settings);
+            if (created) {
+                this.imageProviders.openai = created as unknown as image_provider;
+                return this.imageProviders.openai;
+            }
+        }
+        if (providerKey === "xai" && this.settings.xai_api_key) {
+            const created = createXai({ apiKey: this.settings.xai_api_key });
+            this.imageProviders.xai = created as unknown as image_provider;
+            return this.imageProviders.xai;
+        }
+        return null;
     }
 }

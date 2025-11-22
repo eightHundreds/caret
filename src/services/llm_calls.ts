@@ -1,17 +1,18 @@
-import { createGoogleGenerativeAI, google, GoogleGenerativeAIProvider } from "@ai-sdk/google";
+import { GoogleGenerativeAIProvider } from "@ai-sdk/google";
 import { Notice } from "obsidian";
 import { streamText, StreamTextResult, CoreTool, generateText, generateObject } from "ai";
 import { OpenAIProvider } from "@ai-sdk/openai";
 import { AnthropicProvider } from "@ai-sdk/anthropic";
-import { GroqProvider, createGroq } from "@ai-sdk/groq";
-import { createOllama, OllamaProvider, ollama } from "ollama-ai-provider";
-import { createOpenRouter, OpenRouterProvider } from "@openrouter/ai-sdk-provider";
+import { GroqProvider } from "@ai-sdk/groq";
+import { OllamaProvider, ollama } from "ollama-ai-provider";
+import { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { createOpenAICompatible, OpenAICompatibleProvider } from "@ai-sdk/openai-compatible";
 import { experimental_generateImage as generateImage } from "ai";
 
 import { z } from "zod";
 import type CaretPlugin from "../main";
 import { XaiProvider } from "@ai-sdk/xai";
+import { LLM_PROVIDER_REGISTRY, ProviderKey } from "../config/llm-provider-registry";
 
 // Zod validation for message structure
 const MessageSchema = z.object({
@@ -29,60 +30,35 @@ export type sdk_provider =
     | OllamaProvider
     | OpenRouterProvider
     | OpenAICompatibleProvider;
-export type eligible_provider =
-    | "google"
-    | "openai"
-    | "anthropic"
-    | "groq"
-    | "ollama"
-    | "openrouter"
-    | "custom"
-    | "perplexity";
+export type eligible_provider = ProviderKey | "custom";
 
 export type image_provider = OpenAIProvider | XaiProvider;
 
-const refactored_providers = ["openai", "google", "anthropic", "groq", "ollama", "openrouter", "custom", "perplexity"];
+const refactored_providers: string[] = [...Object.keys(LLM_PROVIDER_REGISTRY), "custom"];
 export const isEligibleProvider = (provider: string): provider is eligible_provider => {
     return refactored_providers.includes(provider);
 };
 export function get_provider(plugin: CaretPlugin, provider: eligible_provider): sdk_provider {
-    switch (provider) {
-        case "openai":
-            return plugin.openai_client;
-        case "google":
-            return plugin.google_client;
-        case "anthropic":
-            return plugin.anthropic_client;
-        case "groq":
-            return plugin.groq_client;
-        case "ollama":
-            return plugin.ollama_client;
-        case "openrouter":
-            return plugin.openrouter_client;
-        case "perplexity":
-            return plugin.perplexity_client;
-        case "custom":
-            const settings = plugin.settings;
-            const current_model = settings.model;
-            const custom_endpoint = settings.custom_endpoints[current_model];
+    if (provider === "custom") {
+        const settings = plugin.settings;
+        const current_model = settings.model;
+        const custom_endpoint = settings.custom_endpoints[current_model];
 
-            if (!custom_endpoint) {
-                throw new Error(`No custom endpoint configuration found for model: ${current_model}`);
-            }
+        if (!custom_endpoint) {
+            throw new Error(`No custom endpoint configuration found for model: ${current_model}`);
+        }
 
-            const sdk_provider = createOpenAICompatible({
-                baseURL: custom_endpoint.endpoint,
-                apiKey: custom_endpoint.api_key,
-                name: provider,
-            });
+        const sdk_provider = createOpenAICompatible({
+            baseURL: custom_endpoint.endpoint,
+            apiKey: custom_endpoint.api_key,
+            name: provider,
+        });
 
-            plugin.custom_client = sdk_provider;
-            return plugin.custom_client;
-        default:
-            throw new Error(
-                `Invalid provider: ${provider}. Must be one of: openai, google, anthropic, groq, ollama, openrouter, custom`
-            );
+        plugin.custom_client = sdk_provider;
+        return plugin.custom_client;
     }
+
+    return plugin.getProviderClient(provider);
 }
 export async function ai_sdk_streaming(
     provider: sdk_provider,
