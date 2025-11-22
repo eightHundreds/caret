@@ -1,10 +1,4 @@
-import {
-    App,
-    Notice,
-    PluginSettingTab,
-    Setting,
-    debounce,
-} from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, debounce } from "obsidian";
 type ModelDropDownSettings = {
     openai: string;
     groq: string;
@@ -15,7 +9,24 @@ type ModelDropDownSettings = {
 };
 
 import type CaretPlugin from "../main";
+import type { CaretPluginSettings } from "../types";
 import { DEFAULT_SETTINGS } from "../config/default-setting";
+
+type ApiKeyConfig = {
+    label: string;
+    placeholder: string;
+    keyField: keyof CaretPluginSettings;
+};
+
+const API_KEY_CONFIG: Record<string, ApiKeyConfig> = {
+    openai: { label: "OpenAI", placeholder: "OpenAI API key", keyField: "openai_api_key" },
+    groq: { label: "Groq", placeholder: "Groq API key", keyField: "groq_api_key" },
+    anthropic: { label: "Anthropic", placeholder: "Anthropic API key", keyField: "anthropic_api_key" },
+    openrouter: { label: "OpenRouter", placeholder: "OpenRouter API key", keyField: "open_router_key" },
+    google: { label: "Google Gemini", placeholder: "Google Gemini API key", keyField: "google_api_key" },
+    perplexity: { label: "Perplexity", placeholder: "Perplexity API key", keyField: "perplexity_api_key" },
+    xai: { label: "xAI", placeholder: "xAI API key", keyField: "xai_api_key" },
+};
 
 export class CaretSettingTab extends PluginSettingTab {
     plugin: CaretPlugin;
@@ -183,113 +194,30 @@ export class CaretSettingTab extends PluginSettingTab {
         }
 
         const apiKeysGroup = this.createGroup(defaultModelGroup, "API keys", "Only show keys for selected providers.");
+        const activeProvider = this.plugin.settings.llm_provider;
+        const apiConfig = API_KEY_CONFIG[activeProvider];
 
-        const apiKeyEntries = [
-            {
-                provider: "openai",
-                label: "OpenAI",
-                placeholder: "OpenAI API key",
-                value: this.plugin.settings.openai_api_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.openai_api_key = value;
+        if (apiConfig) {
+            const currentValue = String((this.plugin.settings as any)[apiConfig.keyField] ?? "");
+            this.addApiKeySetting(
+                apiKeysGroup,
+                `${apiConfig.label} API key`,
+                apiConfig.placeholder,
+                currentValue,
+                async (value: string) => {
+                    (this.plugin.settings as any)[apiConfig.keyField] = value;
                     await this.plugin.saveSettings();
                     await this.plugin.loadSettings();
-                },
-            },
-            {
-                provider: "groq",
-                label: "Groq",
-                placeholder: "Groq API key",
-                value: this.plugin.settings.groq_api_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.groq_api_key = value;
-                    await this.plugin.saveSettings();
-                    await this.plugin.loadSettings();
-                },
-            },
-            {
-                provider: "anthropic",
-                label: "Anthropic",
-                placeholder: "Anthropic API key",
-                value: this.plugin.settings.anthropic_api_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.anthropic_api_key = value;
-                    await this.plugin.saveSettings();
-                    await this.plugin.loadSettings();
-                },
-            },
-            {
-                provider: "openrouter",
-                label: "OpenRouter",
-                placeholder: "OpenRouter API key",
-                value: this.plugin.settings.open_router_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.open_router_key = value;
-                    await this.plugin.saveSettings();
-                    await this.plugin.loadSettings();
-                },
-            },
-            {
-                provider: "google",
-                label: "Google Gemini",
-                placeholder: "Google Gemini API key",
-                value: this.plugin.settings.google_api_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.google_api_key = value;
-                    await this.plugin.saveSettings();
-                    await this.plugin.loadSettings();
-                },
-            },
-            {
-                provider: "perplexity",
-                label: "Perplexity",
-                placeholder: "Perplexity API key",
-                value: this.plugin.settings.perplexity_api_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.perplexity_api_key = value;
-                    await this.plugin.saveSettings();
-                    await this.plugin.loadSettings();
-                },
-            },
-            {
-                provider: "xai",
-                label: "xAI",
-                placeholder: "xAI API key",
-                value: this.plugin.settings.xai_api_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.xai_api_key = value;
-                    await this.plugin.saveSettings();
-                    await this.plugin.loadSettings();
-                },
-            },
-            {
-                provider: "deepseek",
-                label: "DeepSeek",
-                placeholder: "DeepSeek API key",
-                value: this.plugin.settings.deepseek_api_key,
-                onChange: async (value: string) => {
-                    this.plugin.settings.deepseek_api_key = value;
-                    await this.plugin.saveSettings();
-                    await this.plugin.loadSettings();
-                },
-            }
-        ];
-        const activeProviders = new Set<string>([this.plugin.settings.llm_provider]);
-
-        const visibleEntries = apiKeyEntries.filter((entry) => activeProviders.has(entry.provider));
-
-        if (visibleEntries.length === 0) {
+                }
+            );
+        } else {
             apiKeysGroup.createEl("div", {
                 cls: "caret-setting-note",
-                text: "当前选择的提供商无需单独的 API key 或尚未配置。",
-            });
-        } else {
-            visibleEntries.forEach((entry) => {
-                this.addApiKeySetting(apiKeysGroup, `${entry.label} API key`, entry.placeholder, entry.value, entry.onChange);
+                text: "当前选择的提供商无需单独的 API key，或未在 API_KEY_CONFIG 中定义。",
             });
         }
 
-        if (this.plugin.settings.llm_provider === "ollama") {
+        if (activeProvider === "ollama") {
             const ollamaInfo = apiKeysGroup.createEl("div", { cls: "caret-settings-local-tip" });
             ollamaInfo.createEl("strong", { text: "You're using Ollama (local)!" });
             ollamaInfo.createEl("p", { text: "Make sure you have downloaded the model you want to use:" });
