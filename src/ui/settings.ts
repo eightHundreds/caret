@@ -1,17 +1,8 @@
 import {
     App,
-    Editor,
-    MarkdownView,
-    Modal,
     Notice,
-    Plugin,
     PluginSettingTab,
     Setting,
-    ItemView,
-    WorkspaceLeaf,
-    setTooltip,
-    setIcon,
-    requestUrl,
     debounce,
 } from "obsidian";
 type ModelDropDownSettings = {
@@ -23,7 +14,6 @@ type ModelDropDownSettings = {
     perplexity: string;
 };
 
-import { Models, CustomModels, LLMProviderOptions } from "../types";
 import type CaretPlugin from "../main";
 import { DEFAULT_SETTINGS } from "../config/default-setting";
 
@@ -47,6 +37,42 @@ export class CaretSettingTab extends PluginSettingTab {
             // Save the updated settings
             this.plugin.saveSettings();
         }
+    }
+    private createGroup(containerEl: HTMLElement, title: string, desc?: string): HTMLElement {
+        const group = containerEl.createEl("div", { cls: "caret-settings-group" });
+        group.createEl("div", { cls: "caret-settings-group__title", text: title });
+        if (desc) {
+            group.createEl("div", { cls: "caret-settings-group__desc", text: desc });
+        }
+        return group;
+    }
+
+    private createCollapsible(containerEl: HTMLElement, title: string, isOpen = false): HTMLElement {
+        const detailsEl = containerEl.createEl("details", { cls: "caret-settings-collapse" });
+        if (isOpen) {
+            (detailsEl as HTMLDetailsElement).setAttribute("open", "true");
+        }
+        detailsEl.createEl("summary", { text: title });
+        return detailsEl;
+    }
+
+    private addApiKeySetting(
+        parent: HTMLElement,
+        label: string,
+        placeholder: string,
+        value: string,
+        onChange: (val: string) => Promise<void> | void
+    ) {
+        new Setting(parent)
+            .setName(label)
+            .addText((text) => {
+                text.setPlaceholder(placeholder)
+                    .setValue(value)
+                    .onChange(async (val: string) => {
+                        await onChange(val);
+                    });
+                text.inputEl.addClass("caret-hidden-value-unsecure");
+            });
     }
     api_settings_tab(containerEl: HTMLElement): void {
         // API settings logic here
@@ -81,11 +107,11 @@ export class CaretSettingTab extends PluginSettingTab {
                 this.plugin.settings.llm_provider_options[llm_provider] &&
                 this.plugin.settings.llm_provider_options[llm_provider][model]
             ) {
-                const model_details = this.plugin.settings.llm_provider_options[llm_provider][model];
-                if (model_details && model_details.context_window) {
-                    const context_window_value = model_details.context_window;
-                    context_window = parseInt(context_window_value.toString());
-                }
+            const model_details = this.plugin.settings.llm_provider_options[llm_provider][model];
+            if (model_details && model_details.context_window) {
+                const context_window_value = model_details.context_window;
+                context_window = parseInt(context_window_value.toString());
+            }
             }
         } catch (error) {
             console.error("Error retrieving model details:", error);
@@ -106,10 +132,13 @@ export class CaretSettingTab extends PluginSettingTab {
             ).map(([key, value]) => [key, value.name])
         );
 
-        // LLM Provider Settings
-        new Setting(containerEl)
+        const defaultModelGroup = this.createGroup(
+            containerEl,
+            "Default model",
+            "Choose provider and model for text generation."
+        );
+        new Setting(defaultModelGroup)
             .setName("LLM provider")
-            .setDesc("")
             .addDropdown((dropdown) => {
                 dropdown
                     .addOptions(model_drop_down_settings)
@@ -128,7 +157,8 @@ export class CaretSettingTab extends PluginSettingTab {
                         this.display();
                     });
             });
-        const setting = new Setting(containerEl).setName("Model").addDropdown((modelDropdown) => {
+
+        const modelSetting = new Setting(defaultModelGroup).setName("Model").addDropdown((modelDropdown) => {
             modelDropdown.addOptions(model_options_data);
             modelDropdown.setValue(this.plugin.settings.model);
             modelDropdown.onChange(async (value) => {
@@ -140,23 +170,143 @@ export class CaretSettingTab extends PluginSettingTab {
                 this.display();
             });
         });
-        if (this.plugin.settings.model === "gpt-4o") {
-            new Setting(containerEl)
-                .setName("GPT-4o")
-                .setDesc(
-                    "You are are using the new model! If you check errors it might be because your API key doesn't have access."
-                );
-        }
 
         if (context_window) {
-            setting.setDesc(`FYI your selected model has a context window of ${context_window}`);
+            modelSetting.setDesc(`Context window: ${context_window}`);
         }
 
-        // Image Model Settings
+        if (this.plugin.settings.model === "gpt-4o") {
+            defaultModelGroup.createEl("div", {
+                cls: "caret-setting-note",
+                text: "You are using GPT-4o. If errors occur, verify the API key has access.",
+            });
+        }
 
-        new Setting(containerEl)
+        const apiKeysGroup = this.createGroup(defaultModelGroup, "API keys", "Only show keys for selected providers.");
+
+        const apiKeyEntries = [
+            {
+                provider: "openai",
+                label: "OpenAI",
+                placeholder: "OpenAI API key",
+                value: this.plugin.settings.openai_api_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.openai_api_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            },
+            {
+                provider: "groq",
+                label: "Groq",
+                placeholder: "Groq API key",
+                value: this.plugin.settings.groq_api_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.groq_api_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            },
+            {
+                provider: "anthropic",
+                label: "Anthropic",
+                placeholder: "Anthropic API key",
+                value: this.plugin.settings.anthropic_api_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.anthropic_api_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            },
+            {
+                provider: "openrouter",
+                label: "OpenRouter",
+                placeholder: "OpenRouter API key",
+                value: this.plugin.settings.open_router_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.open_router_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            },
+            {
+                provider: "google",
+                label: "Google Gemini",
+                placeholder: "Google Gemini API key",
+                value: this.plugin.settings.google_api_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.google_api_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            },
+            {
+                provider: "perplexity",
+                label: "Perplexity",
+                placeholder: "Perplexity API key",
+                value: this.plugin.settings.perplexity_api_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.perplexity_api_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            },
+            {
+                provider: "xai",
+                label: "xAI",
+                placeholder: "xAI API key",
+                value: this.plugin.settings.xai_api_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.xai_api_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            },
+            {
+                provider: "deepseek",
+                label: "DeepSeek",
+                placeholder: "DeepSeek API key",
+                value: this.plugin.settings.deepseek_api_key,
+                onChange: async (value: string) => {
+                    this.plugin.settings.deepseek_api_key = value;
+                    await this.plugin.saveSettings();
+                    await this.plugin.loadSettings();
+                },
+            }
+        ];
+        const activeProviders = new Set<string>([this.plugin.settings.llm_provider]);
+
+        const visibleEntries = apiKeyEntries.filter((entry) => activeProviders.has(entry.provider));
+
+        if (visibleEntries.length === 0) {
+            apiKeysGroup.createEl("div", {
+                cls: "caret-setting-note",
+                text: "当前选择的提供商无需单独的 API key 或尚未配置。",
+            });
+        } else {
+            visibleEntries.forEach((entry) => {
+                this.addApiKeySetting(apiKeysGroup, `${entry.label} API key`, entry.placeholder, entry.value, entry.onChange);
+            });
+        }
+
+        if (this.plugin.settings.llm_provider === "ollama") {
+            const ollamaInfo = apiKeysGroup.createEl("div", { cls: "caret-settings-local-tip" });
+            ollamaInfo.createEl("strong", { text: "You're using Ollama (local)!" });
+            ollamaInfo.createEl("p", { text: "Make sure you have downloaded the model you want to use:" });
+            ollamaInfo.createEl("code", { text: `ollama run ${this.plugin.settings.model}` });
+            ollamaInfo.createEl("p", { text: "Then start the Ollama server for Obsidian access:" });
+            ollamaInfo.createEl("code", { text: "OLLAMA_ORIGINS=app://obsidian.md* ollama serve" });
+        }
+
+        apiKeysGroup.createEl("div", { cls: "caret-setting-note", text: "Reload the plugin after adding/changing keys." });
+
+        const imageGroup = this.createGroup(
+            containerEl,
+            "Image generation",
+            "Choose provider and model for image generation."
+        );
+        new Setting(imageGroup)
             .setName("Image provider")
-            .setDesc("Choose the provider for image generation")
             .addDropdown((dropdown) => {
                 dropdown
                     .addOptions(this.plugin.settings.image_provider_dropdown_options)
@@ -180,7 +330,7 @@ export class CaretSettingTab extends PluginSettingTab {
             ).map(([key, value]) => [key, value.name])
         );
 
-        const imageModelSetting = new Setting(containerEl).setName("Image model").addDropdown((modelDropdown) => {
+        new Setting(imageGroup).setName("Image model").addDropdown((modelDropdown) => {
             modelDropdown.addOptions(image_model_options_data);
             modelDropdown.setValue(this.plugin.settings.image_model);
             modelDropdown.onChange(async (value) => {
@@ -191,143 +341,6 @@ export class CaretSettingTab extends PluginSettingTab {
             });
         });
 
-        // Show supported sizes for the selected image model
-        const selectedImageModel =
-            this.plugin.settings.image_model_options[this.plugin.settings.image_provider][
-                this.plugin.settings.image_model
-            ];
-        // if (selectedImageModel && selectedImageModel.supported_sizes) {
-        //     imageModelSetting.setDesc(`Supported sizes: ${selectedImageModel.supported_sizes.join(", ")}`);
-        // }
-        if (this.plugin.settings.llm_provider === "ollama") {
-            const ollama_info_container = containerEl.createEl("div", {
-                cls: "caret-settings_container",
-            });
-            ollama_info_container.createEl("strong", { text: "You're using Ollama!" });
-            ollama_info_container.createEl("p", { text: "Remember to do the following:" });
-            ollama_info_container.createEl("p", { text: "Make sure you have downloaded the model you want to use:" });
-            const second_code_block_container = ollama_info_container.createEl("div", {
-                cls: "caret-settings_code_block",
-            });
-
-            second_code_block_container.createEl("code", { text: `ollama run ${this.plugin.settings.model}` });
-            ollama_info_container.createEl("p", {
-                text: "After running the model, kill that command and close the ollama app.",
-            });
-            ollama_info_container.createEl("p", {
-                text: "Then run this command to start the Ollama server and make it accessible from Obsidian:",
-            });
-            const code_block_container = ollama_info_container.createEl("div", {
-                cls: "caret-settings_code_block",
-            });
-            code_block_container.createEl("code", {
-                text: "OLLAMA_ORIGINS=app://obsidian.md* ollama serve",
-            });
-
-            ollama_info_container.createEl("br"); // Adds a line break for spacing
-        }
-
-        new Setting(containerEl)
-            .setName("OpenAI API key")
-            .setDesc("")
-            .addText((text) => {
-                text.setPlaceholder("OpenAI API key")
-                    .setValue(this.plugin.settings.openai_api_key)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.openai_api_key = value;
-                        await this.plugin.saveSettings();
-                        await this.plugin.loadSettings();
-                    });
-                text.inputEl.addClass("caret-hidden-value-unsecure");
-            });
-
-        new Setting(containerEl)
-            .setName("Groq API key")
-            .setDesc("")
-            .addText((text) => {
-                text.setPlaceholder("Groq API key")
-                    .setValue(this.plugin.settings.groq_api_key)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.groq_api_key = value;
-                        await this.plugin.saveSettings();
-                        await this.plugin.loadSettings();
-                    });
-                text.inputEl.addClass("caret-hidden-value-unsecure");
-            });
-        new Setting(containerEl)
-            .setName("Anthropic API key")
-            .setDesc("")
-            .addText((text) => {
-                text.setPlaceholder("Anthropic API key")
-                    .setValue(this.plugin.settings.anthropic_api_key)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.anthropic_api_key = value;
-                        await this.plugin.saveSettings();
-                        await this.plugin.loadSettings();
-                    });
-                text.inputEl.addClass("caret-hidden-value-unsecure");
-            });
-        new Setting(containerEl)
-            .setName("OpenRouter API key")
-            .setDesc("")
-            .addText((text) => {
-                text.setPlaceholder("OpenRouter API key")
-                    .setValue(this.plugin.settings.open_router_key)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.open_router_key = value;
-                        await this.plugin.saveSettings();
-                        await this.plugin.loadSettings();
-                    });
-                text.inputEl.addClass("caret-hidden-value-unsecure");
-            });
-
-        new Setting(containerEl)
-            .setName("Google Gemini API key")
-            .setDesc("")
-            .addText((text) => {
-                text.setPlaceholder("Google Gemini API key")
-                    .setValue(this.plugin.settings.google_api_key)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.google_api_key = value;
-                        await this.plugin.saveSettings();
-                        await this.plugin.loadSettings();
-                    });
-                text.inputEl.addClass("caret-hidden-value-unsecure");
-            });
-
-        new Setting(containerEl)
-            .setName("Perplexity API key")
-            .setDesc("")
-            .addText((text) => {
-                text.setPlaceholder("Perplexity API key")
-                    .setValue(this.plugin.settings.perplexity_api_key)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.perplexity_api_key = value;
-                        await this.plugin.saveSettings();
-                        await this.plugin.loadSettings();
-                    });
-                text.inputEl.addClass("caret-hidden-value-unsecure");
-            });
-
-        new Setting(containerEl)
-            .setName("xAI API key")
-            .setDesc("")
-            .addText((text) => {
-                text.setPlaceholder("xAI API key")
-                    .setValue(this.plugin.settings.xai_api_key)
-                    .onChange(async (value: string) => {
-                        this.plugin.settings.xai_api_key = value;
-                        await this.plugin.saveSettings();
-                        await this.plugin.loadSettings();
-                    });
-                text.inputEl.addClass("caret-hidden-value-unsecure");
-            });
-
-        new Setting(containerEl)
-            .setName("Reload after adding API keys!")
-            .setDesc(
-                "After you added API keys for the first time you will need to reload the plugin for those changes to take effect. \n This only needs to be done the first time or when you change your keys."
-            );
     }
     chat_settings_tab(containerEl: HTMLElement): void {
         let tempChatFolderPath = this.plugin.settings.chat_logs_folder; // Temporary storage for input value
@@ -352,9 +365,10 @@ export class CaretSettingTab extends PluginSettingTab {
             true
         ); // 500ms delay
 
-        new Setting(containerEl)
+        const logGroup = this.createGroup(containerEl, "Log storage", "Manage where chat logs live and how they are named.");
+        new Setting(logGroup)
             .setName("Chat folder path")
-            .setDesc("Specify the folder path where chat logs will be stored.")
+            .setDesc("Path to store chat logs (no trailing slash).")
             .addText((text) => {
                 text.setPlaceholder("Enter folder path")
                     .setValue(this.plugin.settings.chat_logs_folder)
@@ -364,9 +378,9 @@ export class CaretSettingTab extends PluginSettingTab {
                     });
             });
 
-        new Setting(containerEl)
+        new Setting(logGroup)
             .setName("Use date format for subfolders")
-            .setDesc("Use Year-Month-Date as subfolders for the chat logs.")
+            .setDesc("Organize chats by Year-Month-Date folders.")
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.chat_logs_date_format_bool).onChange(async (value: boolean) => {
                     this.plugin.settings.chat_logs_date_format_bool = value;
@@ -375,9 +389,9 @@ export class CaretSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(logGroup)
             .setName("Rename chats")
-            .setDesc("Chats will be given a descriptive name using your default set provider/model")
+            .setDesc("Auto-name chats using the default provider/model.")
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.chat_logs_rename_bool).onChange(async (value: boolean) => {
                     this.plugin.settings.chat_logs_rename_bool = value;
@@ -386,15 +400,15 @@ export class CaretSettingTab extends PluginSettingTab {
                 });
             });
 
-        // LLM Provider Settings
+        const chatGroup = this.createGroup(containerEl, "Input & context", "Control send shortcuts and nested refs.");
         const send_chat_shortcut_options: { [key: string]: string } = {
             enter: "Enter",
             shift_enter: "Shift + Enter",
             // cmd_enter: "CMD + Enter",
         };
-        new Setting(containerEl)
+        new Setting(chatGroup)
             .setName("Send chat keybinds")
-            .setDesc("Select which shortcut will be used to send messages.")
+            .setDesc("Shortcut used to send messages.")
             .addDropdown((dropdown) => {
                 dropdown
                     .addOptions(send_chat_shortcut_options)
@@ -407,9 +421,9 @@ export class CaretSettingTab extends PluginSettingTab {
                     });
             });
 
-        new Setting(containerEl)
+        new Setting(chatGroup)
             .setName("Use nested [[]] content")
-            .setDesc("When set to true, context will include 1 layer of block refs")
+            .setDesc("Include one level of block refs in context when enabled.")
             .addToggle((toggle) => {
                 toggle.setValue(this.plugin.settings.include_nested_block_refs).onChange(async (value: boolean) => {
                     this.plugin.settings.include_nested_block_refs = value;
@@ -427,35 +441,30 @@ export class CaretSettingTab extends PluginSettingTab {
         }
 
         const tabContainer = containerEl.createEl("div", { cls: "caret-tab-container" });
-        const apiTab = tabContainer.createEl("button", { text: "LLM APIs ", cls: "caret-tab" });
-        const chatTab = tabContainer.createEl("button", { text: "Chat", cls: "caret-tab" });
+        const modelTab = tabContainer.createEl("button", { text: "Models & generation", cls: "caret-tab is-active" });
+        const chatTab = tabContainer.createEl("button", { text: "Chat & logs", cls: "caret-tab" });
 
-        const apiSettingsContainer = containerEl.createEl("div", { cls: "caret-api-settings-container caret-hidden" });
-        const chatSettingsContainer = containerEl.createEl("div", {
-            cls: "caret-chat-settings-container caret-hidden",
-        });
+        const sectionsContainer = containerEl.createEl("div", { cls: "caret-settings-sections" });
+        const modelSection = sectionsContainer.createEl("div", { cls: "caret-settings-section" });
+        const chatSection = sectionsContainer.createEl("div", { cls: "caret-settings-section caret-hidden" });
 
-        this.api_settings_tab(apiSettingsContainer);
-        this.chat_settings_tab(chatSettingsContainer);
+        this.api_settings_tab(modelSection);
+        this.chat_settings_tab(chatSection);
 
-        // LLM Provider Settings
         new Setting(containerEl).setDesc(`Caret Version: ${this.plugin.settings.caret_version}`);
 
-        apiTab.addEventListener("click", () => {
-            apiSettingsContainer.classList.remove("caret-hidden");
-            chatSettingsContainer.classList.add("caret-hidden");
+        modelTab.addEventListener("click", () => {
+            modelTab.classList.add("is-active");
+            chatTab.classList.remove("is-active");
+            modelSection.classList.remove("caret-hidden");
+            chatSection.classList.add("caret-hidden");
         });
 
         chatTab.addEventListener("click", () => {
-            chatSettingsContainer.classList.remove("caret-hidden");
-            apiSettingsContainer.classList.add("caret-hidden");
-            // Placeholder for chat settings rendering function
-            // this.chat_settings_tab(chatSettingsContainer);
+            chatTab.classList.add("is-active");
+            modelTab.classList.remove("is-active");
+            chatSection.classList.remove("caret-hidden");
+            modelSection.classList.add("caret-hidden");
         });
-
-        // Initially load API settings tab
-        apiTab.click();
-
-        // this.api_settings_tab(containerEl);
     }
 }

@@ -165,6 +165,7 @@ export interface CaretPluginSettings {
     open_router_key: string;
     anthropic_api_key: string;
     xai_api_key: string;
+    deepseek_api_key: string;
     context_window: number;
     custom_endpoints: { [model: string]: CustomModels };
     system_prompt: string;

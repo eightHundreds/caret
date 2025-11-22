@@ -312,6 +312,80 @@
 
 .caret-tab {
     margin-right: 4px;
+    padding: 6px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-primary);
+    cursor: pointer;
+}
+.caret-tab.is-active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+.caret-tab-container {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.caret-settings-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.caret-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.caret-settings-group {
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background: var(--background-secondary);
+}
+.caret-settings-group__title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.caret-settings-group__desc {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+.caret-settings-collapse {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 8px;
+    background: var(--background-primary);
+    margin-top: 8px;
+}
+.caret-settings-collapse summary {
+    cursor: pointer;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.caret-settings-collapse .setting-item {
+    margin-top: 4px;
+}
+.caret-setting-note {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 6px;
+}
+.caret-settings-local-tip {
+    background: var(--background-primary-alt, var(--background-primary));
+    border: 1px dashed var(--background-modifier-border);
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+.caret-settings-local-tip code {
+    display: block;
+    background: var(--background-secondary);
+    padding: 4px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
 }
 
 /* Modals CSS */
