@@ -1,4 +1,4 @@
-import { CaretPluginSettings } from "./types";
+import { CaretPluginSettings } from "../types";
 
 export const DEFAULT_SETTINGS: CaretPluginSettings = {
     caret_version: "0.2.80",
@@ -22,13 +22,6 @@ export const DEFAULT_SETTINGS: CaretPluginSettings = {
         openai: {
             "gpt-4-turbo": {
                 name: "gpt-4-turbo",
-                context_window: 128000,
-                function_calling: true,
-                vision: true,
-                streaming: true,
-            },
-            "gpt-3.5-turbo": {
-                name: "gpt-3.5-turbo",
                 context_window: 128000,
                 function_calling: true,
                 vision: true,
@@ -455,6 +448,15 @@ export const DEFAULT_SETTINGS: CaretPluginSettings = {
                 streaming: true,
             },
         },
+        deepseek:{
+            "deepseek-chat":{
+                name: "DeepSeek Chat",
+                context_window: 128000,
+                function_calling: true,
+                vision: true,
+                streaming: true,
+            }
+        },
         perplexity: {
             "llama-3.1-sonar-small-128k-online": {
                 name: "Sonar Small",
@@ -488,6 +490,7 @@ export const DEFAULT_SETTINGS: CaretPluginSettings = {
         custom: "Custom",
         google: "Google Gemini",
         perplexity: "Perplexity",
+        deepseek: "DeepSeek",
     },
     include_nested_block_refs: true,
     google_api_key: "",

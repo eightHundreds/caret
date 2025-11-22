@@ -1,6 +1,6 @@
 import { Notice, ItemView, WorkspaceLeaf, TFile } from "obsidian";
-import { WorkflowPrompt, CaretPluginSettings } from "../src/types";
-import { DEFAULT_SETTINGS } from "../src/default-setting";
+import { WorkflowPrompt, CaretPluginSettings } from "../../types";
+import { DEFAULT_SETTINGS } from "../../config/default-setting";
 
 export class LinearWorkflowEditor extends ItemView {
     plugin: any;

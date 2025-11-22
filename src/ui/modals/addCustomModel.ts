@@ -1,5 +1,5 @@
 import { App, Modal, Notice, Setting } from "obsidian";
-import { CaretPluginSettings, CustomModels } from "src/types";
+import { CaretPluginSettings, CustomModels } from "../../types";
 export class CustomModelModal extends Modal {
     model_id: string = "";
     model_name: string = "";

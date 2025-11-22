@@ -1,7 +1,7 @@
 # Project Context
 
 ## Purpose
-[Describe your project's purpose and goals]
+这个项目是Obsidian canvas的增强插件，主要功能是使用LLM在canvas中进行绘画，并支持使用LLM进行canvas的编辑。
 
 ## Tech Stack
 - [List your primary technologies]

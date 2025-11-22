@@ -8,14 +8,14 @@ import {
     ai_sdk_completion,
     ai_sdk_structured,
     ai_sdk_image_gen,
-} from "./llm_calls";
+} from "./services/llm_calls";
 
 // // @ts-ignore
 // import ollama from "ollama/browser";
 import { encodingForModel } from "js-tiktoken";
 import OpenAI from "openai";
 import { around } from "monkey-around";
-import { Canvas, ViewportNode, Message, Node, Edge, SparkleConfig, UnknownData, ImageModelOptions } from "./src/types";
+import { Canvas, ViewportNode, Message, Node, Edge, SparkleConfig, UnknownData, ImageModelOptions, NewNode, CaretPluginSettings } from "./types";
 import {
     MarkdownView,
     Modal,
@@ -31,17 +31,16 @@ import {
 import { CanvasFileData, CanvasNodeData, CanvasTextData } from "obsidian/canvas";
 
 // Import all of the views, components, models, etc
-import { CaretSettingTab } from "./settings";
-import { CMDJModal } from "./modals/inlineEditingModal";
-import { RemoveCustomModelModal } from "./modals/removeCustomModel";
+import { CaretSettingTab } from "./ui/settings";
+import { CMDJModal } from "./ui/modals/inlineEditingModal";
+import { RemoveCustomModelModal } from "./ui/modals/removeCustomModel";
 // import { ResearchModal } from "./modals/researcherModal";
-import { SystemPromptModal } from "./modals/systemPromptModal";
-import { redBackgroundField } from "./editorExtensions/inlineDiffs";
-import { NewNode, CaretPluginSettings } from "./src/types";
-import { CustomModelModal } from "./modals/addCustomModel";
-import { LinearWorkflowEditor } from "./views/workflowEditor";
-import { FullPageChat, VIEW_CHAT } from "./views/chat";
-import { CaretCanvas } from "./caret_canvas";
+import { SystemPromptModal } from "./ui/modals/systemPromptModal";
+import { redBackgroundField } from "./features/editor/inlineDiffs";
+import { CustomModelModal } from "./ui/modals/addCustomModel";
+import { LinearWorkflowEditor } from "./ui/views/workflowEditor";
+import { FullPageChat, VIEW_CHAT } from "./ui/views/chat";
+import { CaretCanvas } from "./features/canvas/caret_canvas";
 const parseString = require("xml2js").parseString;
 import { createGoogleGenerativeAI, GoogleGenerativeAIProvider } from "@ai-sdk/google";
 import { createOpenAI, OpenAIProvider } from "@ai-sdk/openai";
@@ -52,7 +51,7 @@ import { createOllama, OllamaProvider } from "ollama-ai-provider";
 import { createOpenRouter, OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { createOpenAICompatible, OpenAICompatibleProvider } from "@ai-sdk/openai-compatible";
 import { createXai, xai, XaiProvider } from "@ai-sdk/xai";
-import { DEFAULT_SETTINGS } from "./src/default-setting";
+import { DEFAULT_SETTINGS } from "./config/default-setting";
 
 export default class CaretPlugin extends Plugin {
     settings: CaretPluginSettings;

@@ -1,13 +1,13 @@
 import { streamText, StreamTextResult, CoreTool, generateText, generateObject } from "ai";
-import { ai_sdk_streaming, isEligibleProvider, sdk_provider, get_provider, ai_sdk_completion } from "../llm_calls";
+import { ai_sdk_streaming, isEligibleProvider, sdk_provider, get_provider, ai_sdk_completion } from "../../services/llm_calls";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { ConvertTextToNoteModal } from "../modals/convertTextToNoteModal";
 import { InsertNoteModal } from "../modals/insertNoteModal";
 import ChatComponent from "../components/chat";
-import { Message } from "../src/types";
+import { Message } from "../../types";
 import { Notice, ItemView, WorkspaceLeaf } from "obsidian";
-import CaretPlugin from "../main";
+import type CaretPlugin from "../../main";
 export const VIEW_CHAT = "main-caret";
 export class FullPageChat extends ItemView {
     chat_id: string;

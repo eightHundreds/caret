@@ -1,5 +1,5 @@
 import { streamText, StreamTextResult, CoreTool, generateText, generateObject } from "ai";
-import { ai_sdk_streaming, isEligibleProvider, sdk_provider, get_provider, ai_sdk_completion } from "../llm_calls";
+import { ai_sdk_streaming, isEligibleProvider, sdk_provider, get_provider, ai_sdk_completion } from "../../services/llm_calls";
 import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -7,7 +7,7 @@ import { materialDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Clipboard } from "lucide-react";
 import { NotebookPen } from "lucide-react";
 import remarkGfm from "remark-gfm";
-import CaretPlugin from "../main";
+import type CaretPlugin from "../../main";
 
 interface ChatComponentProps {
     plugin: CaretPlugin;

@@ -10,7 +10,7 @@ import { createOpenAICompatible, OpenAICompatibleProvider } from "@ai-sdk/openai
 import { experimental_generateImage as generateImage } from "ai";
 
 import { z } from "zod";
-import CaretPlugin from "main";
+import type CaretPlugin from "../main";
 import { XaiProvider } from "@ai-sdk/xai";
 
 // Zod validation for message structure
