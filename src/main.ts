@@ -44,10 +44,9 @@ const parseString = require("xml2js").parseString;
 import { StreamTextResult, CoreTool } from "ai";
 import { DEFAULT_SETTINGS } from "./config/default-setting";
 
-import { buildProviderMaps, createProviderClient, ImageProviderKey } from "./services/provider-factory";
-import type { eligible_provider, image_provider } from "./services/llm_calls";
-import { ProviderKey } from "./config/llm-provider-registry";
-import { createXai } from "@ai-sdk/xai";
+import { buildProviderMaps, createImageProvider, createProviderClient, ImageProviderKey } from "./services/provider-factory";
+import type { image_provider } from "./services/llm_calls";
+import { ensureModelSettings } from "./config/llm-provider-registry";
 
 export default class CaretPlugin extends Plugin {
     settings: CaretPluginSettings;
@@ -57,7 +56,7 @@ export default class CaretPlugin extends Plugin {
     encoder: any;
     pdfjs: any;
     custom_client: any;
-    llmProviders: Partial<Record<eligible_provider, sdk_provider>> = {};
+    llmProviders: Record<string, sdk_provider> = {};
     imageProviders: Partial<Record<ImageProviderKey, image_provider>> = {};
 
     async onload() {
@@ -72,6 +71,7 @@ export default class CaretPlugin extends Plugin {
         this.pdfjs = await loadPdfJs();
         // Load settings
         await this.loadSettings();
+        ensureModelSettings(this.settings);
 
         const { llmProviders, imageProviders } = buildProviderMaps(this.settings);
         this.llmProviders = llmProviders;
@@ -2476,7 +2476,7 @@ version: 1
                             const prompt_content = prompt._.trim();
                             const prompt_delay = prompt.$?.delay || 0;
                             const prompt_model = prompt.$?.model || "default";
-                            const prompt_provider = prompt.$?.provider || "default";
+                            const prompt_provider = this.settings.llm_provider || "custom";
                             const prompt_temperature = parseFloat(prompt.$?.temperature) || this.settings.temperature;
                             const new_node_content = `${prompt_content}`;
                             const x = node.x + node.width + 200;
@@ -2492,9 +2492,12 @@ version: 1
                                 "right",
                                 "left"
                             );
+                            const providerOptions =
+                                this.settings.llm_provider_options[
+                                    this.settings.llm_provider as keyof typeof this.settings.llm_provider_options
+                                ] || {};
                             const model_context_window =
-                                this.settings.llm_provider_options[prompt_provider]?.[prompt_model]?.context_window ||
-                                this.settings.context_window;
+                                providerOptions[prompt_model]?.context_window || this.settings.context_window;
                             user_node.unknownData.role = "user";
                             user_node.unknownData.displayOverride = false;
 
@@ -2547,7 +2550,7 @@ version: 1
                             const prompt_content = prompt._.trim();
                             const prompt_delay = prompt.$?.delay || 0;
                             const prompt_model = prompt.$?.model || "default";
-                            const prompt_provider = prompt.$?.provider || "default";
+                            const prompt_provider = this.settings.llm_provider || "custom";
                             const prompt_temperature = parseFloat(prompt.$?.temperature) || this.settings.temperature;
                             const new_node_content = `${prompt_content}`;
                             const x = current_node.x + current_node.width + 200;
@@ -2563,9 +2566,12 @@ version: 1
                                 "right",
                                 "left"
                             );
+                            const providerOptions =
+                                this.settings.llm_provider_options[
+                                    this.settings.llm_provider as keyof typeof this.settings.llm_provider_options
+                                ] || {};
                             const model_context_window =
-                                this.settings.llm_provider_options[prompt_provider]?.[prompt_model]?.context_window ||
-                                this.settings.context_window;
+                                providerOptions[prompt_model]?.context_window || this.settings.context_window;
                             user_node.unknownData.role = "user";
                             user_node.unknownData.displayOverride = false;
                             const sparkle_config: SparkleConfig = {
@@ -3070,32 +3076,27 @@ version: 1
         await this.saveData(this.settings);
     }
 
-    getProviderClient(provider: eligible_provider): sdk_provider {
-        const cached = this.llmProviders[provider];
+    getProviderClient(modelId: string): sdk_provider {
+        const cached = this.llmProviders[modelId];
         if (cached) return cached;
-        const created = createProviderClient(provider as ProviderKey, this.settings);
+        const created = createProviderClient(modelId, this.settings);
         if (!created) {
-            throw new Error(`Missing API client for provider ${provider}. 请检查 API key 配置。`);
+            throw new Error(`模型 ${modelId} 缺少有效的 endpoint 或 API key。`);
         }
-        this.llmProviders[provider] = created;
+        this.llmProviders[modelId] = created;
         return created;
     }
 
     getImageProvider() {
-        const providerKey: ImageProviderKey = this.settings.image_provider === "xai" ? "xai" : "openai";
+        const providerKey: ImageProviderKey = "openai";
         const cached = this.imageProviders[providerKey];
         if (cached) return cached;
         if (providerKey === "openai") {
-            const created = createProviderClient("openai", this.settings);
+            const created = createImageProvider("openai", this.settings);
             if (created) {
                 this.imageProviders.openai = created as unknown as image_provider;
                 return this.imageProviders.openai;
             }
-        }
-        if (providerKey === "xai" && this.settings.xai_api_key) {
-            const created = createXai({ apiKey: this.settings.xai_api_key });
-            this.imageProviders.xai = created as unknown as image_provider;
-            return this.imageProviders.xai;
         }
         return null;
     }

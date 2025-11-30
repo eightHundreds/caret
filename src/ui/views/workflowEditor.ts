@@ -1,6 +1,5 @@
 import { Notice, ItemView, WorkspaceLeaf, TFile } from "obsidian";
 import { WorkflowPrompt, CaretPluginSettings } from "../../types";
-import { DEFAULT_SETTINGS } from "../../config/default-setting";
 
 export class LinearWorkflowEditor extends ItemView {
     plugin: any;
@@ -52,8 +51,8 @@ export class LinearWorkflowEditor extends ItemView {
                 for (let i = 0; i < xml_prompts.length; i++) {
                     const prompt = xml_prompts[i]._.trim();
                     const delay = parseInt(xml_prompts[i].$.delay) || 0;
-                    const model = xml_prompts[i].$.model || "default";
-                    const provider = xml_prompts[i].$.provider || "default";
+                    const model = xml_prompts[i].$.model || this.plugin.settings.model || "default";
+                    const provider = this.plugin.settings.llm_provider || "custom";
                     const temperature = parseFloat(xml_prompts[i].$.temperature) || this.plugin.settings.temperature;
 
                     if (prompt.trim().length > 0) {
@@ -138,10 +137,6 @@ export class LinearWorkflowEditor extends ItemView {
                     new Notice(`Prompt ${i + 1}: Model must have a value`);
                     return;
                 }
-                if (!prompt.provider) {
-                    new Notice(`Prompt ${i + 1}: Provider must have a value`);
-                    return;
-                }
                 const delay = parseInt(prompt.delay, 10);
                 if (isNaN(delay) || delay < 0 || delay > 60) {
                     new Notice(`Prompt ${i + 1}: Delay must be a number between 0 and 60`);
@@ -175,13 +170,14 @@ ${this.plugin.escapeXml(this.system_prompt)}
 `;
 
         let prompts_string = ``;
+        const providerAttr = this.plugin.settings.llm_provider || "custom";
         for (let i = 0; i < this.prompts.length; i++) {
             if (this.prompts[i].prompt.length === 0) {
                 continue;
             }
             const escaped_content = this.plugin.escapeXml(this.prompts[i].prompt);
             prompts_string += `
-<prompt model="${this.prompts[i].model || "default"}" provider="${this.prompts[i].provider || "default"}" delay="${
+<prompt model="${this.prompts[i].model || "default"}" provider="${providerAttr}" delay="${
                 this.prompts[i].delay || "default"
             }" temperature="${this.prompts[i].temperature || "default"}">
 ${escaped_content}
@@ -272,7 +268,13 @@ ${prompts_string}
     }
 
     add_prompt(
-        prompt: WorkflowPrompt = { model: "default", provider: "default", delay: "0", temperature: "1", prompt: "" },
+        prompt: WorkflowPrompt = {
+            model: this.plugin.settings.model || "default",
+            provider: this.plugin.settings.llm_provider || "custom",
+            delay: "0",
+            temperature: "1",
+            prompt: "",
+        },
         loading_prompt: boolean = false,
         index: number | null = null
     ) {
@@ -294,32 +296,7 @@ ${prompts_string}
         const options_container = this.prompt_container.createEl("div", {
             cls: "caret-flex-row",
         });
-        // Provider label and dropdown
-        const provider_label = options_container.createEl("label", {
-            text: "Provider",
-            cls: "caret-row_items_spacing",
-        });
-        const provider_select = options_container.createEl("select", {
-            cls: "caret-provider_select caret-row_items_spacing",
-        });
         const settings: CaretPluginSettings = this.plugin.settings;
-        const provider_entries = Object.entries(DEFAULT_SETTINGS.provider_dropdown_options);
-
-        // Ensure the provider select has a default value set from the beginning
-        if (provider_entries.length > 0) {
-            provider_entries.forEach(([provider_key, provider_name]) => {
-                const option = provider_select.createEl("option", { text: provider_name });
-                option.value = provider_key;
-            });
-        }
-
-        // Default to the first provider if prompt.provider is not set
-        if (!prompt.provider && provider_entries.length > 0) {
-            prompt.provider = provider_entries[0][0];
-        }
-
-        // Set the default value after options are added
-        provider_select.value = prompt.provider || provider_entries[0][0];
 
         // Model label and dropdown
         const model_label = options_container.createEl("label", {
@@ -331,14 +308,14 @@ ${prompts_string}
         });
 
         // Function to update model options based on selected provider
-        const update_model_options = (provider: string) => {
-            if (!provider) {
-                return;
-            }
+        const update_model_options = () => {
             while (model_select.firstChild) {
                 model_select.removeChild(model_select.firstChild);
             }
-            const models = settings.llm_provider_options[provider];
+            const models =
+                settings.llm_provider_options[
+                    this.plugin.settings.llm_provider as keyof typeof settings.llm_provider_options
+                ] || {};
             Object.entries(models).forEach(([model_key, model_details]) => {
                 const option = model_select.createEl("option", { text: model_details.name });
                 option.value = model_key;
@@ -347,14 +324,8 @@ ${prompts_string}
             model_select.value = prompt.model;
         };
 
-        // Add event listener to provider select to update models dynamically
-        provider_select.addEventListener("change", (event) => {
-            const selected_provider = (event.target as HTMLSelectElement).value;
-            update_model_options(selected_provider);
-        });
-
         // Initialize model options based on the default or current provider
-        update_model_options(provider_select.value);
+        update_model_options();
         model_select.value = prompt.model;
 
         // Temperature label and input
@@ -392,8 +363,8 @@ ${prompts_string}
 
         if (!loading_prompt) {
             this.prompts.push({
-                model: provider_select.value,
-                provider: provider_select.value,
+                model: model_select.value || prompt.model,
+                provider: this.plugin.settings.llm_provider || "custom",
                 delay: delay_input.value,
                 temperature: temperature_input.value,
                 prompt: text_area.value,
@@ -401,7 +372,6 @@ ${prompts_string}
         }
 
         text_area.id = `text_area_id_${array_index}`;
-        provider_select.id = `provider_select_id_${array_index}`;
         model_select.id = `model_select_id_${array_index}`;
         temperature_input.id = `temperature_input_id_${array_index}`;
         delay_input.id = `delay_input_id_${array_index}`;
@@ -413,18 +383,11 @@ ${prompts_string}
             }
         });
 
-        provider_select.addEventListener("change", () => {
-            const provider_select_element = this.prompt_container.querySelector(`#provider_select_id_${array_index}`);
-            if (provider_select_element) {
-                this.prompts[array_index].provider = provider_select.value;
-                update_model_options(provider_select.value);
-            }
-        });
-
         model_select.addEventListener("change", () => {
             const model_select_element = this.prompt_container.querySelector(`#model_select_id_${array_index}`);
             if (model_select_element) {
                 this.prompts[array_index].model = model_select.value;
+                this.prompts[array_index].provider = this.plugin.settings.llm_provider || "custom";
             }
         });
 

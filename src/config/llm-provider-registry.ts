@@ -1,12 +1,8 @@
-import type { CaretPluginSettings, LLMProviderOptions, Models } from "../types";
+import type { CaretPluginSettings, CustomModels, LLMProviderOptions, Models } from "../types";
 
-type ProviderRegistryEntry = {
-    label: string;
-    apiKeyField?: keyof CaretPluginSettings;
-    models: string[];
-};
+export type ProviderKey = "custom";
 
-const DEFAULT_MODEL_META: Models = {
+export const DEFAULT_MODEL_META: Models = {
     name: "default",
     context_window: 128000,
     function_calling: true,
@@ -14,56 +10,62 @@ const DEFAULT_MODEL_META: Models = {
     streaming: true,
 };
 
-export const LLM_PROVIDER_REGISTRY: Record<string, ProviderRegistryEntry> = {
-    openai: { label: "OpenAI", apiKeyField: "openai_api_key", models: ["gpt-4o"] },
-    groq: { label: "Groq", apiKeyField: "groq_api_key", models: ["llama3-70b-8192"] },
-    anthropic: { label: "Anthropic", apiKeyField: "anthropic_api_key", models: ["claude-3.5-sonnet"] },
-    openrouter: { label: "OpenRouter", apiKeyField: "open_router_key", models: ["anthropic/claude-3.5-sonnet"] },
-    ollama: { label: "Ollama", models: ["llama3.1"] },
-    custom: { label: "Custom", models: ["custom"] },
-    google: { label: "Google Gemini", apiKeyField: "google_api_key", models: ["gemini-2.0-flash"] },
-    deepseek: { label: "DeepSeek", apiKeyField: "deepseek_api_key", models: ["deepseek-chat"] },
-    perplexity: { label: "Perplexity", apiKeyField: "perplexity_api_key", models: ["llama-3.1-sonar-small-128k-online"] },
+export const DEFAULT_CUSTOM_MODELS: Record<string, CustomModels> = {
+    "gpt-4o": {
+        ...DEFAULT_MODEL_META,
+        name: "GPT-4o",
+        endpoint: "https://api.openai.com/v1",
+        api_key: "",
+    },
 };
 
-export function buildProviderOptions(registry = LLM_PROVIDER_REGISTRY): LLMProviderOptions {
-    return Object.fromEntries(
-        Object.entries(registry).map(([provider, def]) => {
-            const models = def.models.length > 0 ? def.models : ["default"];
-            const modelOptions = Object.fromEntries(
-                models.map((model) => [
-                    model,
-                    {
-                        ...DEFAULT_MODEL_META,
-                        name: model,
-                    },
-                ])
-            );
-            return [provider, modelOptions];
-        })
-    ) as LLMProviderOptions;
+export const PROVIDER_DROPDOWN_OPTIONS: Record<ProviderKey, string> = {
+    custom: "OpenAI 兼容",
+};
+
+export function buildProviderOptions(customModels: Record<string, CustomModels>): LLMProviderOptions {
+    const customOptions = Object.fromEntries(
+        Object.entries(customModels).map(([modelId, model]) => [
+            modelId,
+            {
+                name: model.name || modelId,
+                context_window: model.context_window ?? DEFAULT_MODEL_META.context_window,
+                function_calling: model.function_calling ?? DEFAULT_MODEL_META.function_calling,
+                vision: model.vision ?? DEFAULT_MODEL_META.vision,
+                streaming: model.streaming ?? DEFAULT_MODEL_META.streaming,
+            },
+        ])
+    );
+
+    return {
+        custom: customOptions,
+    };
 }
 
-export const LLM_PROVIDER_OPTIONS: LLMProviderOptions = buildProviderOptions();
+export const LLM_PROVIDER_OPTIONS: LLMProviderOptions = buildProviderOptions(DEFAULT_CUSTOM_MODELS);
 
-export const PROVIDER_DROPDOWN_OPTIONS = Object.fromEntries(
-    Object.entries(LLM_PROVIDER_REGISTRY).map(([key, def]) => [key, def.label])
-);
+export function ensureModelSettings(settings: CaretPluginSettings) {
+    if (!settings.custom_endpoints || Object.keys(settings.custom_endpoints).length === 0) {
+        settings.custom_endpoints = { ...DEFAULT_CUSTOM_MODELS };
+    }
+    Object.entries(settings.custom_endpoints).forEach(([key, value]) => {
+        if (value.pinned === undefined) {
+            value.pinned = false;
+        }
+        if (!value.name) {
+            value.name = key;
+        }
+    });
 
-export const API_KEY_CONFIG = Object.fromEntries(
-    Object.entries(LLM_PROVIDER_REGISTRY)
-        .filter(([, def]) => !!def.apiKeyField)
-        .map(([key, def]) => [key, { label: def.label, placeholder: `${def.label} API key`, keyField: def.apiKeyField! }])
-);
+    settings.llm_provider_options = buildProviderOptions(settings.custom_endpoints);
+    settings.provider_dropdown_options = { ...PROVIDER_DROPDOWN_OPTIONS };
+    settings.llm_provider = "custom";
 
-export function getModelById(modelId: string) {
-    const [provider, ...rest] = modelId.split(":");
-    const model = rest.join(":");
-    const providerDef = LLM_PROVIDER_REGISTRY[provider];
-    const modelConfig = providerDef?.models?.includes(model)
-        ? { ...DEFAULT_MODEL_META, name: model }
-        : { ...DEFAULT_MODEL_META, name: model };
-    return { provider, model, config: modelConfig };
+    if (!settings.model || !settings.custom_endpoints[settings.model]) {
+        const firstModel = Object.keys(settings.custom_endpoints)[0];
+        settings.model = firstModel;
+    }
+
+    const modelConfig = settings.custom_endpoints[settings.model];
+    settings.context_window = modelConfig?.context_window ?? DEFAULT_MODEL_META.context_window;
 }
-
-export type ProviderKey = keyof typeof LLM_PROVIDER_REGISTRY;

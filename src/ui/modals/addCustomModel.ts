@@ -1,5 +1,6 @@
 import { App, Modal, Notice, Setting } from "obsidian";
 import { CaretPluginSettings, CustomModels } from "../../types";
+import { ensureModelSettings } from "../../config/llm-provider-registry";
 export class CustomModelModal extends Modal {
     model_id: string = "";
     model_name: string = "";
@@ -10,7 +11,6 @@ export class CustomModelModal extends Modal {
     url: string = "";
     api_key: string = "";
     plugin: any;
-    known_provider: string = "";
 
     constructor(app: App, plugin: any) {
         super(app);
@@ -22,9 +22,9 @@ export class CustomModelModal extends Modal {
         contentEl.empty();
 
         contentEl.createEl("h2", { text: "Add custom model" });
-        contentEl.createEl("div", { text: "Note: The model needs to support the OpenAI spec.", cls: "callout" });
+        contentEl.createEl("div", { text: "仅支持 OpenAI 兼容接口，请填写 endpoint 与 API key。", cls: "callout" });
         contentEl.createEl("div", {
-            text: "Note: The endpoint needs to support CORS. This is experimental and might require additional CORS settings to be added to Caret. Let me know!",
+            text: "Endpoint 需要允许 CORS。如果遇到跨域问题，请调整服务端设置或反馈需求。",
             cls: "callout",
         });
 
@@ -62,6 +62,14 @@ export class CustomModelModal extends Modal {
                     this.function_calling = value;
                 });
             });
+        new Setting(contentEl)
+            .setName("Streaming")
+            .setDesc("是否支持流式输出。")
+            .addToggle((toggle) => {
+                toggle.setValue(this.streaming).onChange((value) => {
+                    this.streaming = value;
+                });
+            });
 
         new Setting(contentEl)
             .setName("Context size")
@@ -89,17 +97,6 @@ export class CustomModelModal extends Modal {
                     this.api_key = value;
                 });
             });
-
-        new Setting(contentEl)
-            .setName("Known provider")
-            .setDesc("Select this if it's a known endpoint like Ollama.")
-            .addDropdown((dropdown) => {
-                dropdown.addOption("ollama", "Ollama");
-                dropdown.addOption("openrouter", "OpenRouter");
-                dropdown.setValue(this.known_provider).onChange((value) => {
-                    this.known_provider = value;
-                });
-            });
         new Setting(contentEl).addButton((button) => {
             button.setButtonText("Submit").onClick(async () => {
                 const settings: CaretPluginSettings = this.plugin.settings;
@@ -111,12 +108,15 @@ export class CustomModelModal extends Modal {
                     return;
                 }
 
-                if (
-                    (!this.url || this.url.trim() === "") &&
-                    (!this.known_provider || this.known_provider.trim() === "")
-                ) {
-                    new Notice("Either endpoint or known provider must be set");
-                    console.error("Validation Error: Either endpoint or known provider must be set");
+                if (!this.url || this.url.trim() === "") {
+                    new Notice("Endpoint must be set");
+                    console.error("Validation Error: Endpoint must be set");
+                    return;
+                }
+
+                if (!this.api_key || this.api_key.trim() === "") {
+                    new Notice("API key must exist");
+                    console.error("Validation Error: API key must exist");
                     return;
                 }
 
@@ -133,16 +133,16 @@ export class CustomModelModal extends Modal {
                 }
                 const new_model: CustomModels = {
                     name: this.model_name,
-                    context_window: this.context_window,
-                    function_calling: this.function_calling, // Assuming default value as it's not provided in the form
+                    context_window: parsed_context_window,
+                    function_calling: this.function_calling,
                     vision: this.vision,
-                    streaming: true,
+                    streaming: this.streaming,
                     endpoint: this.url,
                     api_key: this.api_key,
-                    known_provider: this.known_provider,
                 };
 
                 settings.custom_endpoints[this.model_id] = new_model;
+                ensureModelSettings(settings);
 
                 await this.plugin.saveSettings();
 

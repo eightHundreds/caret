@@ -1,5 +1,6 @@
 import { App, Modal } from "obsidian";
 import { CustomModels } from "../../types";
+import { ensureModelSettings } from "../../config/llm-provider-registry";
 export class RemoveCustomModelModal extends Modal {
     plugin: any;
 
@@ -36,6 +37,7 @@ export class RemoveCustomModelModal extends Modal {
             const deleteButton = deleteButtonContainer.createEl("button", { text: "Delete", cls: "caret-mod-warning" });
             deleteButton.addEventListener("click", async () => {
                 delete custom_models[model_id];
+                ensureModelSettings(this.plugin.settings);
                 await this.plugin.saveSettings();
                 this.onOpen(); // Refresh the modal to reflect changes
             });

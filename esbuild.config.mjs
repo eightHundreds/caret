@@ -1,6 +1,10 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import sveltePlugin from "esbuild-svelte";
+import sveltePreprocess from "svelte-preprocess";
+import fs from "fs";
+import path from "path";
 
 const banner =
 `/*
@@ -11,6 +15,29 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === "production");
 
+const svelte = sveltePlugin({
+	compilerOptions: { dev: !prod },
+	preprocess: [sveltePreprocess({ typescript: { tsconfigFile: "tsconfig.json" } })],
+	filterWarnings: (warning) => {
+		return !warning.code.includes('a11y');
+	},
+});
+
+const renameCssPlugin = {
+	name: "rename-css-to-style",
+	setup(build) {
+		build.onEnd((result) => {
+			if (!result.metafile) return;
+			const outputs = Object.keys(result.metafile.outputs || {});
+			const cssOut = outputs.find((f) => f.endsWith(".css"));
+			if (!cssOut) return;
+			const target = path.join(path.dirname(cssOut), "styles.css");
+			fs.renameSync(cssOut, target);
+			console.log(`css renamed: ${cssOut} -> ${target}`);
+		});
+	},
+};
+
 const context = await esbuild.context({
 	banner: {
 		js: banner,
@@ -18,6 +45,7 @@ const context = await esbuild.context({
 	entryPoints: ["src/main.ts"],
 	bundle: true,
 	tsconfig: "tsconfig.json",
+	plugins: [svelte, renameCssPlugin],
 	external: [
 		"obsidian",
 		"electron",
@@ -39,6 +67,7 @@ const context = await esbuild.context({
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",
+	metafile: true,
 });
 
 if (prod) {

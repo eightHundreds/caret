@@ -116,7 +116,8 @@ export interface Models {
 export interface CustomModels extends Models {
     endpoint: string;
     api_key: string;
-    known_provider: string;
+    pinned?: boolean;
+    last_used?: number;
 }
 
 export interface LLMProviderOptions {
@@ -159,22 +160,24 @@ export interface CaretPluginSettings {
     chat_send_chat_shortcut: string;
     model: string;
     llm_provider: string;
-    openai_api_key: string;
-    groq_api_key: string;
-
-    open_router_key: string;
-    anthropic_api_key: string;
-    xai_api_key: string;
-    deepseek_api_key: string;
     context_window: number;
     custom_endpoints: { [model: string]: CustomModels };
     system_prompt: string;
     temperature: number;
     llm_provider_options: LLMProviderOptions;
     provider_dropdown_options: { [key: string]: string };
+    /** 
+     * 是否包含嵌套的块引用内容
+     * 当启用时，系统会自动检测文本中的块引用（格式如 [[filename]] 或 [[filename#block-id]]），
+     * 并读取被引用文件的内容，将其追加到原始文本中。
+     * 这个功能会影响以下场景：
+     * - 构建节点上下文时（ancestor nodes）
+     * - 处理节点文本内容时
+     * - 处理系统提示（system prompt）时
+     * - 处理聊天消息内容时
+     * 默认值为 true，表示默认包含嵌套的块引用内容。
+     */
     include_nested_block_refs: boolean;
-    google_api_key: string;
-    perplexity_api_key: string;
 
     image_model: string;
     image_provider: string;

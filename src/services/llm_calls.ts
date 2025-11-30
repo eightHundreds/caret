@@ -1,18 +1,10 @@
-import { GoogleGenerativeAIProvider } from "@ai-sdk/google";
 import { Notice } from "obsidian";
-import { streamText, StreamTextResult, CoreTool, generateText, generateObject } from "ai";
-import { OpenAIProvider } from "@ai-sdk/openai";
-import { AnthropicProvider } from "@ai-sdk/anthropic";
-import { GroqProvider } from "@ai-sdk/groq";
-import { OllamaProvider, ollama } from "ollama-ai-provider";
-import { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
+import { streamText, StreamTextResult, CoreTool, generateText, generateObject, experimental_generateImage as generateImage } from "ai";
 import { createOpenAICompatible, OpenAICompatibleProvider } from "@ai-sdk/openai-compatible";
-import { experimental_generateImage as generateImage } from "ai";
-
+import { OpenAIProvider } from "@ai-sdk/openai";
 import { z } from "zod";
 import type CaretPlugin from "../main";
-import { XaiProvider } from "@ai-sdk/xai";
-import { LLM_PROVIDER_REGISTRY, ProviderKey } from "../config/llm-provider-registry";
+import { ensureModelSettings } from "../config/llm-provider-registry";
 
 // Zod validation for message structure
 const MessageSchema = z.object({
@@ -22,55 +14,78 @@ const MessageSchema = z.object({
 
 const ConversationSchema = z.array(MessageSchema);
 
-export type sdk_provider =
-    | GoogleGenerativeAIProvider
-    | OpenAIProvider
-    | AnthropicProvider
-    | GroqProvider
-    | OllamaProvider
-    | OpenRouterProvider
-    | OpenAICompatibleProvider;
-export type eligible_provider = ProviderKey | "custom";
+export type sdk_provider = OpenAICompatibleProvider;
+export type eligible_provider = "custom";
 
-export type image_provider = OpenAIProvider | XaiProvider;
+export type image_provider = OpenAIProvider;
 
-const refactored_providers: string[] = [...Object.keys(LLM_PROVIDER_REGISTRY), "custom"];
-export const isEligibleProvider = (provider: string): provider is eligible_provider => {
-    return refactored_providers.includes(provider);
+export const isEligibleProvider = (_provider: string): _provider is eligible_provider => {
+    return true;
 };
-export function get_provider(plugin: CaretPlugin, provider: eligible_provider): sdk_provider {
-    if (provider === "custom") {
-        const settings = plugin.settings;
-        const current_model = settings.model;
-        const custom_endpoint = settings.custom_endpoints[current_model];
 
-        if (!custom_endpoint) {
-            throw new Error(`No custom endpoint configuration found for model: ${current_model}`);
-        }
+export function get_provider(plugin: CaretPlugin, _provider?: eligible_provider): sdk_provider {
+    ensureModelSettings(plugin.settings);
+    const settings = plugin.settings;
+    const current_model = settings.model;
+    const custom_endpoint = settings.custom_endpoints[current_model];
 
-        const sdk_provider = createOpenAICompatible({
-            baseURL: custom_endpoint.endpoint,
-            apiKey: custom_endpoint.api_key,
-            name: provider,
-        });
-
-        plugin.custom_client = sdk_provider;
-        return plugin.custom_client;
+    if (!custom_endpoint) {
+        throw new Error(`模型 ${current_model} 的 endpoint 未配置`);
+    }
+    if (!custom_endpoint.endpoint) {
+        throw new Error(`模型 ${current_model} 缺少 endpoint`);
+    }
+    if (!custom_endpoint.api_key) {
+        throw new Error(`模型 ${current_model} 缺少 API key`);
     }
 
-    return plugin.getProviderClient(provider);
+    const cached = (plugin as any)._cached_custom_client as {
+        provider?: sdk_provider;
+        modelId?: string;
+        endpoint?: string;
+        apiKey?: string;
+    };
+
+    if (
+        cached?.provider &&
+        cached.modelId === current_model &&
+        cached.endpoint === custom_endpoint.endpoint &&
+        cached.apiKey === custom_endpoint.api_key
+    ) {
+        return cached.provider;
+    }
+
+    const sdk_provider = createOpenAICompatible({
+        baseURL: custom_endpoint.endpoint,
+        apiKey: custom_endpoint.api_key,
+        name: "custom",
+    });
+
+    (plugin as any)._cached_custom_client = {
+        provider: sdk_provider,
+        modelId: current_model,
+        endpoint: custom_endpoint.endpoint,
+        apiKey: custom_endpoint.api_key,
+    };
+    plugin.custom_client = sdk_provider;
+    return plugin.custom_client;
 }
+
+function validateConversation(conversation: Array<{ role: string; content: string }>) {
+    return ConversationSchema.parse(conversation);
+}
+
 export async function ai_sdk_streaming(
     provider: sdk_provider,
     model: string,
     conversation: Array<{ role: string; content: string }>,
     temperature: number,
-    provider_name: eligible_provider
+    provider_name: string
 ): Promise<StreamTextResult<Record<string, CoreTool<any, any>>, never>> {
-    new Notice(`Calling ${provider_name[0].toUpperCase() + provider_name.slice(1)}`);
+    const displayLabel = provider_name && provider_name !== "custom" ? provider_name : model;
+    new Notice(`调用 ${displayLabel}`);
 
-    // Validate conversation structure
-    const validatedConversation = ConversationSchema.parse(conversation);
+    const validatedConversation = validateConversation(conversation);
 
     const handleError = (event: unknown) => {
         const error = (event as { error: unknown }).error;
@@ -79,57 +94,33 @@ export async function ai_sdk_streaming(
 
         if (errors?.some((e) => e.statusCode === 429)) {
             console.error("Rate limit exceeded error");
-            new Notice(`Rate limit exceeded for ${provider_name} API`);
+            new Notice(`模型 ${displayLabel} 触发限速`);
         } else {
-            new Notice(`Unknown error during ${provider_name} streaming`);
+            new Notice(`调用 ${displayLabel} 出现未知错误`);
         }
     };
 
-    if (provider_name === "openrouter") {
-        const openrouter_provider = provider as OpenRouterProvider;
-        return await streamText({
-            model: openrouter_provider.chat(model),
-            messages: validatedConversation,
-            temperature,
-            onError: handleError,
-        });
-    }
-
-    const final_provider = provider as Exclude<sdk_provider, OpenRouterProvider>;
-    const stream = await streamText({
-        model: final_provider(model),
+    return streamText({
+        model: provider(model),
         messages: validatedConversation,
         temperature,
         onError: handleError,
     });
-
-    return stream;
 }
 export async function ai_sdk_completion(
     provider: sdk_provider,
     model: string,
     conversation: Array<{ role: string; content: string }>,
     temperature: number,
-    provider_name: eligible_provider
+    provider_name: string
 ): Promise<string> {
-    new Notice(`Calling ${provider_name[0].toUpperCase() + provider_name.slice(1)}`);
+    const displayLabel = provider_name && provider_name !== "custom" ? provider_name : model;
+    new Notice(`调用 ${displayLabel}`);
 
-    // Validate conversation structure
-    const validatedConversation = ConversationSchema.parse(conversation);
+    const validatedConversation = validateConversation(conversation);
 
-    if (provider_name === "openrouter") {
-        const openrouter_provider = provider as OpenRouterProvider;
-        const response = await generateText({
-            model: openrouter_provider.chat(model),
-            messages: validatedConversation,
-            temperature,
-        });
-        return response.text;
-    }
-
-    const final_provider = provider as Exclude<sdk_provider, OpenRouterProvider>;
     const response = await generateText({
-        model: final_provider(model),
+        model: provider(model),
         messages: validatedConversation,
         temperature,
     });
@@ -141,30 +132,16 @@ export async function ai_sdk_structured<T extends z.ZodType>(
     model: string,
     conversation: Array<{ role: string; content: string }>,
     temperature: number,
-    provider_name: eligible_provider,
+    provider_name: string,
     schema: T
 ): Promise<z.infer<T>> {
-    new Notice(`Calling ${provider_name[0].toUpperCase() + provider_name.slice(1)}`);
+    const displayLabel = provider_name && provider_name !== "custom" ? provider_name : model;
+    new Notice(`调用 ${displayLabel}`);
 
-    // Validate conversation structure
-    const validatedConversation = ConversationSchema.parse(conversation);
+    const validatedConversation = validateConversation(conversation);
 
-    if (provider_name === "openrouter") {
-        const openrouter_provider = provider as OpenRouterProvider;
-        const response = await generateObject({
-            model: openrouter_provider.chat(model),
-            schema,
-            messages: validatedConversation,
-            temperature,
-            mode: "json",
-        });
-
-        return response;
-    }
-
-    const final_provider = provider as Exclude<sdk_provider, OpenRouterProvider>;
     const response = await generateObject({
-        model: final_provider(model),
+        model: provider(model),
         schema,
         messages: validatedConversation,
         temperature,
@@ -174,7 +151,6 @@ export async function ai_sdk_structured<T extends z.ZodType>(
 }
 
 export async function ai_sdk_image_gen(params: { provider: image_provider; prompt: string; model: string }) {
-    // Implementation to be added
     const model = params.model;
     const { image } = await generateImage({
         model: params.provider.image(model),

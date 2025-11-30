@@ -1,5 +1,5 @@
 import { CaretPluginSettings } from "../types";
-import { LLM_PROVIDER_OPTIONS, PROVIDER_DROPDOWN_OPTIONS } from "./llm-provider-registry";
+import { DEFAULT_CUSTOM_MODELS, LLM_PROVIDER_OPTIONS, PROVIDER_DROPDOWN_OPTIONS } from "./llm-provider-registry";
 
 export const DEFAULT_SETTINGS: CaretPluginSettings = {
     caret_version: "0.2.80",
@@ -8,23 +8,14 @@ export const DEFAULT_SETTINGS: CaretPluginSettings = {
     chat_logs_rename_bool: true,
     chat_send_chat_shortcut: "enter",
     model: "gpt-4o",
-    llm_provider: "openai",
-    openai_api_key: "",
-    groq_api_key: "",
-
-    anthropic_api_key: "",
-    open_router_key: "",
-    xai_api_key: "",
-    deepseek_api_key: "",
+    llm_provider: "custom",
     context_window: 128000,
-    custom_endpoints: {},
+    custom_endpoints: { ...DEFAULT_CUSTOM_MODELS },
     system_prompt: "",
     temperature: 1,
     llm_provider_options: LLM_PROVIDER_OPTIONS,
     provider_dropdown_options: PROVIDER_DROPDOWN_OPTIONS,
     include_nested_block_refs: true,
-    google_api_key: "",
-    perplexity_api_key: "",
     image_model: "dall-e-3",
     image_provider: "openai",
     image_model_options: {
@@ -38,15 +29,8 @@ export const DEFAULT_SETTINGS: CaretPluginSettings = {
                 supported_sizes: ["1024x1024", "1792x1024", "1024x1792"],
             },
         },
-        xai: {
-            "grok-2-image": {
-                name: "Grok 2 Image",
-                supported_sizes: ["1024x768"],
-            },
-        },
     },
     image_provider_dropdown_options: {
         openai: "OpenAI",
-        xai: "xAI Grok",
     },
 };
