@@ -1,6 +1,5 @@
-import CaretPlugin from "../../main";
 import { View } from "obsidian";
-
+import { getLongestLineage } from "./lineage";
 import { CaretPluginSettings, Edge, Node, SparkleConfig } from "../../types";
 
 export class CaretCanvas {
@@ -67,10 +66,10 @@ export class CaretCanvas {
     }
 
     getLongestLineage(node_id: string) {
-        return CaretPlugin.getLongestLineage(this.nodes, this.edges, node_id);
+        return getLongestLineage(this.nodes, this.edges, node_id);
     }
 
-    static fromPlugin(plugin: CaretPlugin) {
+    static fromPlugin(plugin: any) {
         return new CaretCanvas(plugin.app.workspace.getMostRecentLeaf()!.view);
     }
 }

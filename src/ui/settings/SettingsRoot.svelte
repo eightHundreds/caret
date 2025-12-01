@@ -36,9 +36,8 @@
         return candidate;
     }
 
-    function sortedModels() {
-        const entries = Object.entries(settings.custom_endpoints || {});
-        const defaultId = settings.model;
+    function sortedModels(customEndpoints = {}, defaultId) {
+        const entries = Object.entries(customEndpoints || {});
         return entries.sort(([aId, aVal], [bId, bVal]) => {
             if (aId === defaultId) return -1;
             if (bId === defaultId) return 1;
@@ -48,7 +47,7 @@
         });
     }
 
-    $: modelsList = sortedModels();
+    $: modelsList = sortedModels(settings.custom_endpoints, settings.model);
     $: defaultModel = settings.custom_endpoints[settings.model] || { ...DEFAULT_MODEL_META, endpoint: "", api_key: "" };
 
     function updateModel(modelId, partial) {
@@ -134,6 +133,10 @@
             settings.model = first;
             const ctx = settings.custom_endpoints[first]?.context_window;
             if (ctx) settings.context_window = ctx;
+        }
+        if (editingId === modelId) {
+            editingId = null;
+            draft = null;
         }
         cloneSettings();
         await save("library");
@@ -393,18 +396,19 @@
                     <div class="setting-item-name">模型库</div>
                     <div class="setting-item-description">管理自定义模型、能力与密钥。</div>
                 </div>
-                <div class="setting-item-control">
+                <div class="setting-item-control caret-setting-actions">
                     <button class="mod-cta" on:click={addModel}>新增模型</button>
                 </div>
             </div>
-            {#each modelsList as [modelId, model]}
-                <div class="setting-item caret-model-row">
-                    <div class="setting-item-info">
-                        <div class="setting-item-name">{model.name || modelId}</div>
-                        <div class="setting-item-description">
-                            <div class="caret-model-meta">
-                                <span>ID: {modelId}</span>
-                                <span>
+
+            <div class="caret-model-list">
+                {#each modelsList as [modelId, model]}
+                    <div class="caret-model-card">
+                        <div class="caret-model-card__header">
+                            <div class="caret-model-card__title">
+                                <div class="caret-model-card__name">{model.name || modelId}</div>
+                                <div class="caret-model-card__id">ID: {modelId}</div>
+                                <div class="caret-model-card__tags">
                                     {#if model.streaming || model.function_calling || model.vision}
                                         {[model.streaming ? "流式" : null, model.function_calling ? "工具" : null, model.vision ? "视觉" : null]
                                             .filter(Boolean)
@@ -412,67 +416,87 @@
                                     {:else}
                                         无能力标签
                                     {/if}
-                                </span>
+                                </div>
+                            </div>
+                            <div class="caret-model-card__actions">
+                                <button class={modelId === settings.model ? "mod-cta" : ""} on:click={() => setDefaultModel(modelId)}>
+                                    {modelId === settings.model ? "当前默认" : "设为默认"}
+                                </button>
+                                <button class="caret-inline-btn" on:click={() => togglePinned(modelId)}>{model.pinned ? "取消置顶" : "置顶"}</button>
+                                <button class="caret-inline-btn" on:click={() => copyModel(modelId)}>复制</button>
+                                <button class="caret-inline-btn mod-warning" on:click={() => deleteModel(modelId)}>删除</button>
+                                <button class="caret-inline-btn" on:click={() => startEdit(modelId, model)}>{editingId === modelId ? "编辑中" : "编辑"}</button>
                             </div>
                         </div>
+                        {#if editingId === modelId && draft}
+                            <div class="caret-model-card__body">
+                                <div class="caret-model-card__grid">
+                                    <label>模型名称</label>
+                                    <input type="text" bind:value={draft.name} placeholder="模型名称" />
+                                </div>
+                                <div class="caret-model-card__grid">
+                                    <label>模型 ID</label>
+                                    <input type="text" bind:value={draft.id} placeholder="模型 ID" />
+                                </div>
+                                <div class="caret-model-card__grid">
+                                    <label>Endpoint</label>
+                                    <input type="text" bind:value={draft.endpoint} placeholder="https://api.your-llm.com/v1" />
+                                </div>
+                                <div class="caret-model-card__grid">
+                                    <label>API key</label>
+                                    <input type="password" bind:value={draft.api_key} placeholder="sk-..." />
+                                </div>
+                                <div class="caret-model-card__grid">
+                                    <label>上下文窗口</label>
+                                    <input type="number" bind:value={draft.context_window} placeholder="上下文窗口" />
+                                </div>
+                                <div class="caret-model-card__toggles">
+                                    <label class="caret-toggle-inline">
+                                        <div class="checkbox-container">
+                                            <input type="checkbox" bind:checked={draft.streaming} />
+                                        </div>
+                                        <span>流式输出</span>
+                                    </label>
+                                    <label class="caret-toggle-inline">
+                                        <div class="checkbox-container">
+                                            <input type="checkbox" bind:checked={draft.function_calling} />
+                                        </div>
+                                        <span>工具调用</span>
+                                    </label>
+                                    <label class="caret-toggle-inline">
+                                        <div class="checkbox-container">
+                                            <input type="checkbox" bind:checked={draft.vision} />
+                                        </div>
+                                        <span>视觉/多模态</span>
+                                    </label>
+                                    <label class="caret-toggle-inline">
+                                        <div class="checkbox-container">
+                                            <input type="checkbox" bind:checked={draft.pinned} />
+                                        </div>
+                                        <span>置顶</span>
+                                    </label>
+                                </div>
+                                <div class="caret-setting-actions">
+                                    <button class="mod-cta" on:click={saveDraft}>保存</button>
+                                    <button class="caret-inline-btn" on:click={cancelEdit}>取消</button>
+                                </div>
+                            </div>
+                        {/if}
                     </div>
-                    <div class="setting-item-control caret-setting-actions">
-                        <button class={modelId === settings.model ? "mod-cta" : ""} on:click={() => setDefaultModel(modelId)}>
-                            {modelId === settings.model ? "当前默认" : "设为默认"}
-                        </button>
-                        <button on:click={() => togglePinned(modelId)}>{model.pinned ? "取消置顶" : "置顶"}</button>
-                        <button on:click={() => copyModel(modelId)}>复制</button>
-                        <button class="mod-warning" on:click={() => deleteModel(modelId)}>删除</button>
-                        <button on:click={() => startEdit(modelId, model)}>{editingId === modelId ? "编辑中" : "编辑"}</button>
-                    </div>
-                </div>
-                {#if editingId === modelId && draft}
-                    <div class="setting-item mod-nested">
-                        <div class="setting-item-info">
-                            <div class="setting-item-name">编辑 {model.name || modelId}</div>
-                            <div class="setting-item-description">修改后点击保存应用。</div>
-                        </div>
-                        <div class="setting-item-control caret-setting-control-stack">
-                            <input type="text" bind:value={draft.name} placeholder="模型名称" />
-                            <input type="text" bind:value={draft.id} placeholder="模型 ID" />
-                            <input type="text" bind:value={draft.endpoint} placeholder="https://api.your-llm.com/v1" />
-                            <input type="password" bind:value={draft.api_key} placeholder="sk-..." />
-                            <input type="number" bind:value={draft.context_window} placeholder="上下文窗口" />
-                            <div class="caret-toggle-inline">
-                                <div class="checkbox-container">
-                                    <input type="checkbox" bind:checked={draft.streaming} />
-                                </div>
-                                <span>流式输出</span>
-                            </div>
-                            <div class="caret-toggle-inline">
-                                <div class="checkbox-container">
-                                    <input type="checkbox" bind:checked={draft.function_calling} />
-                                </div>
-                                <span>工具调用</span>
-                            </div>
-                            <div class="caret-toggle-inline">
-                                <div class="checkbox-container">
-                                    <input type="checkbox" bind:checked={draft.vision} />
-                                </div>
-                                <span>视觉/多模态</span>
-                            </div>
-                            <div class="caret-toggle-inline">
-                                <div class="checkbox-container">
-                                    <input type="checkbox" bind:checked={draft.pinned} />
-                                </div>
-                                <span>置顶</span>
-                            </div>
-                            <div class="caret-setting-actions">
-                                <button class="mod-cta" on:click={saveDraft}>保存</button>
-                                <button on:click={cancelEdit}>取消</button>
-                            </div>
-                        </div>
-                    </div>
-                {/if}
-            {/each}
+                {/each}
+            </div>
         {/if}
 
         {#if activeTab === "chat"}
+            <div class="setting-item">
+                <div class="setting-item-info">
+                    <div class="setting-item-name">全局 System prompt</div>
+                    <div class="setting-item-description">为所有聊天与节点追加的前置提示，留空则不使用。</div>
+                </div>
+                <div class="setting-item-control">
+                    <textarea rows="4" bind:value={settings.system_prompt} placeholder="例如：你是一个简洁可靠的助手，回答时先给结论。"></textarea>
+                </div>
+            </div>
             <div class="setting-item">
                 <div class="setting-item-info">
                     <div class="setting-item-name">Chat folder path</div>
@@ -565,21 +589,79 @@
         align-items: stretch;
         width: 100%;
     }
-    .caret-model-row .setting-item-info {
-        gap: var(--size-4-1);
-    }
-    .caret-model-meta {
+    
+    .caret-model-list {
         display: flex;
-        gap: var(--size-4-3);
-        flex-wrap: wrap;
-        color: var(--text-muted);
+        flex-direction: column;
+        gap: var(--size-4-2);
     }
-    .setting-item.mod-nested {
-        margin-left: var(--size-4-5);
+    .caret-model-card {
         border: var(--border-width) solid var(--background-modifier-border);
         border-radius: var(--radius-l);
-        padding: var(--size-4-2) var(--size-4-3);
+        padding: var(--size-4-3);
         background: var(--background-primary);
+        box-shadow: 0 1px 4px color-mix(in srgb, var(--background-modifier-box-shadow, rgba(0, 0, 0, 0.2)) 60%, transparent);
+    }
+    .caret-model-card__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--size-4-2);
+    }
+    .caret-model-card__title {
+        display: flex;
+        flex-direction: column;
+        gap: var(--size-2-2);
+    }
+    .caret-model-card__name {
+        font-weight: var(--font-semibold);
+        color: var(--text-normal);
+    }
+    .caret-model-card__id {
+        color: var(--text-muted);
+        font-size: var(--font-smallest);
+    }
+    .caret-model-card__tags {
+        color: var(--text-faint);
+        font-size: var(--font-smallest);
+    }
+    .caret-model-card__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--size-2-3);
+        justify-content: flex-end;
+    }
+    .caret-model-card__actions button {
+        border-radius: var(--button-radius);
+    }
+    .caret-inline-btn {
+        padding: 6px 10px;
+        border-radius: var(--button-radius);
+        border: var(--border-width) solid var(--background-modifier-border);
+        background: var(--background-secondary);
+        color: var(--text-normal);
+        cursor: var(--cursor);
+    }
+    .caret-model-card__body {
+        margin-top: var(--size-4-2);
+        border-top: var(--border-width) solid var(--background-modifier-border);
+        padding-top: var(--size-4-2);
+        display: grid;
+        gap: var(--size-4-2);
+    }
+    .caret-model-card__grid {
+        display: flex;
+        flex-direction: column;
+        gap: var(--size-2-2);
+    }
+    .caret-model-card__grid label {
+        color: var(--text-muted);
+        font-weight: var(--font-medium);
+    }
+    .caret-model-card__toggles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--size-4-2);
     }
     .caret-toggle-inline {
         display: flex;
@@ -587,8 +669,13 @@
         gap: var(--size-4-2);
     }
     .setting-item-control select,
-    .setting-item-control input {
+    .setting-item-control input,
+    .setting-item-control textarea,
+    .caret-model-card__grid input {
         width: 100%;
+    }
+    .setting-item-control textarea {
+        min-height: 120px;
     }
     .caret-setting-actions button {
         border-radius: var(--button-radius);
